@@ -35,9 +35,9 @@ def main():
     cv2.resizeWindow('Tuner', 500, 300)
 
     # 트랙바 생성 (H: 0-179, S/V: 0-255)
-    cv2.createTrackbar('H_MIN', 'Tuner', 5, 179, nothing)
-    cv2.createTrackbar('S_MIN', 'Tuner', 50, 255, nothing)
-    cv2.createTrackbar('V_MIN', 'Tuner', 50, 255, nothing)
+    cv2.createTrackbar('H_MIN', 'Tuner', 0, 179, nothing)
+    cv2.createTrackbar('S_MIN', 'Tuner', 90, 255, nothing)
+    cv2.createTrackbar('V_MIN', 'Tuner', 0, 255, nothing)
     cv2.createTrackbar('H_MAX', 'Tuner', 25, 179, nothing)
     cv2.createTrackbar('S_MAX', 'Tuner', 255, 255, nothing)
     cv2.createTrackbar('V_MAX', 'Tuner', 255, 255, nothing)

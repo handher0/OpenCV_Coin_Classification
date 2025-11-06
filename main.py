@@ -39,7 +39,7 @@ def resize_with_aspect_ratio(image, width):
     dim = (width, int(h * r))
 
     # 리사이징
-    print(f"resizing : {w}x{h} -> {dim[0]}x{dim[1]}")
+    #print(f"resizing : {w}x{h} -> {dim[0]}x{dim[1]}")
     resized = cv2.resize(image, dim, interpolation=cv2.INTER_AREA)
     return resized
 
@@ -77,64 +77,50 @@ def filter_nested_circles(circles):
 
     return np.uint16(np.around(final_circles))
 
-
-def load_templates(template_folder="templete", resize_dim=(200, 200)):
+def load_templates(template_folder="templete", resize_dim=(100, 100)):
     """
     'templete' 폴더에서 템플릿 이미지를 로드 및
-    ORB 디스크립터 추출하여 전역 COIN_TEMPLATES 딕셔너리에 저장
+    리사이징한 후, (kp, des) 쌍을 COIN_TEMPLATES에 저장
     """
     if not os.path.exists(template_folder):
-        print(f"Error: Template folder not found at '{template_folder}'")
+        #print(f"Error: Template folder not found at '{template_folder}'")
         return
 
-    # 파일 이름 파싱을 위한 정규표현식
     pattern = re.compile(r"(\d+)([fb])\.(jpe?g|png)$", re.IGNORECASE)
+    #print(f"Loading templates (Resizing to {resize_dim})...")
 
     for filename in os.listdir(template_folder):
         match = pattern.match(filename)
+        if not match: continue
 
-        if not match:
-            continue
-
-        # 정규식 그룹에서 값 추출
         coin_value_str, side, extension = match.groups()
         coin_value = int(coin_value_str)
+        if coin_value not in COIN_TEMPLATES: continue
 
-        if coin_value not in COIN_TEMPLATES:
-            continue
-
-        # 이미지 파일 경로
         filepath = os.path.join(template_folder, filename)
-
-        # 템플릿 이미지를 그레이스케일로 로드
         template_img = cv2.imread(filepath, cv2.IMREAD_GRAYSCALE)
-
         if template_img is None:
-            print(f"Failed to load template: {filename}")
+            #print(f"Failed to load template: {filename}")
             continue
 
         try:
             template_resized = cv2.resize(template_img, resize_dim, interpolation=cv2.INTER_AREA)
         except cv2.error as e:
-            print(f"Failed to resize template {filename}: {e}")
+            #print(f"Failed to resize template {filename}: {e}")
             continue
 
-        # 템플릿의 키포인트와 디스크립터 추출
-        kp, des = orb.detectAndCompute(template_img, None)
+        kp, des = orb.detectAndCompute(template_resized, None)
 
-        if des is not None:
-            COIN_TEMPLATES[coin_value].append(des)
-        else:
-            print(f"Warning: No descriptors found for {filename}")
-    print(f"  10 won: {len(COIN_TEMPLATES[10])} templates")
-    print(f"  50 won: {len(COIN_TEMPLATES[50])} templates")
-    print(f" 100 won: {len(COIN_TEMPLATES[100])} templates")
-    print(f" 500 won: {len(COIN_TEMPLATES[500])} templates")
+        if des is not None and len(kp) > 0:
+            # des만 저장하는 대신 (kp, des) 튜플(쌍)을 저장
+            COIN_TEMPLATES[coin_value].append((kp, des))
+
+
 
 
 def is_ten(color_roi_cropped, x, y, r, ratio_threshold=0.6):
     """
-    입력된 컬러 ROI가 10원짜리 동전(구리색)인지 색상으로 판별합니다.
+    입력된 컬러 ROI가 10원짜리 동전(구리색)인지 색상으로 판별
 
     :param color_roi_cropped: bitwise_and로 추출된 원형의 BGR 컬러 ROI
     :param ratio_threshold: 10원으로 판단하기 위한 픽셀 비율 임계값
@@ -148,20 +134,14 @@ def is_ten(color_roi_cropped, x, y, r, ratio_threshold=0.6):
     hsv = cv2.cvtColor(color_roi_cropped, cv2.COLOR_BGR2HSV)
 
     # 3. 10원짜리 동전의 구리색/갈색 범위 정의 (HSV)
-    #    H(색상): 5-25 (주황~갈색 계열)
-    #    S(채도): 50-255 (너무 탁하지 않은 색)
-    #    V(명도): 50-255 (너무 어둡거나 밝지 않은 색)
-    #
-    #    *** 중요: 이 값은 조명 환경에 따라 튜닝이 필요합니다! ***
-    lower_copper = np.array([0, 90, 50])
+    # hsv_tuner.py 사용하여 튜닝값 설정
+    lower_copper = np.array([0, 90, 0])
     upper_copper = np.array([24, 255, 255])
 
     # 4. 지정된 색상 범위에 해당하는 픽셀 마스크 생성
     color_mask = cv2.inRange(hsv, lower_copper, upper_copper)
 
     # 5. ROI 영역(검은색 배경 제외)의 총 픽셀 수 계산
-    #    color_roi_cropped는 이미 원형 마스킹이 적용되어 배경이 (0,0,0)입니다.
-    #    그레이스케일로 변환 후, 0이 아닌 값(동전 영역)의 개수를 셉니다.
     gray_roi = cv2.cvtColor(color_roi_cropped, cv2.COLOR_BGR2GRAY)
     _ , coin_area_mask = cv2.threshold(gray_roi, 1, 255, cv2.THRESH_BINARY)
     total_coin_pixels = cv2.countNonZero(coin_area_mask)
@@ -169,12 +149,11 @@ def is_ten(color_roi_cropped, x, y, r, ratio_threshold=0.6):
     if total_coin_pixels == 0:
         return False  # 동전 영역이 없음
 
-    # 6. 동전 영역 *내에서* 구리색 픽셀 수 계산
-    #    (구리색 마스크) AND (동전 영역 마스크)
+    # 6. 동전 영역 내에서 구리색 픽셀 수 계산
     copper_on_coin_mask = cv2.bitwise_and(color_mask, coin_area_mask)
     copper_pixel_count = cv2.countNonZero(copper_on_coin_mask)
 
-    # 7. (디버깅용) 마스크 확인 - 필요하면 주석 해제
+    # 7. (디버깅용) 마스크 확인
     # cv2.imshow(f"Check 10w - {np.random.randint(0, 100)}",
     #            np.hstack([color_roi_cropped,
     #                       cv2.cvtColor(color_mask, cv2.COLOR_GRAY2BGR),
@@ -183,9 +162,9 @@ def is_ten(color_roi_cropped, x, y, r, ratio_threshold=0.6):
     # 8. 동전 영역 대비 구리색 픽셀의 비율 계산
     copper_ratio = copper_pixel_count / float(total_coin_pixels)
 
-    # 9. 비율이 임계값(ratio_threshold)보다 높으면 10원으로 판단
+    # 9. 비율이 임계값보다 높으면 10원으로 판단
     if copper_ratio > ratio_threshold:
-        print(f"  [10원 판정] (x:{x}, y:{y}, r:{r} / 비율: {copper_ratio:.2f})")
+        #print(f"  [10원 판정] (x:{x}, y:{y}, r:{r} / 비율: {copper_ratio:.2f})")
         return True
     else:
         # (디버깅용) 10원이 아니라고 판단될 때 비율 출력
@@ -197,86 +176,82 @@ def is_ten(color_roi_cropped, x, y, r, ratio_threshold=0.6):
 # NORM_HAMMING: ORB, BRIEF 같은 바이너리 디스크립터에 사용
 bf = cv2.BFMatcher(cv2.NORM_HAMMING)
 
-
-def classify_coin(gray_roi_cropped, x, y, r, min_match_threshold=2, resize_dim=(200, 200)):
+def classify_coin(gray_roi_cropped, x, y, r,
+                  resize_dim=(100, 100),
+                  ratio_threshold=0.85,
+                  min_inlier_threshold=4):
     """
-    (개선된 버전)
-    1. ROI 크기를 정규화 (Normalization)
-    2. Lowe's Ratio Test를 이용한 knnMatch로 분류
-
-    :param gray_roi_cropped: 검출된 동전의 그레이스케일 ROI
-    :param min_match_threshold: 동전으로 판정하기 위한 최소 매칭 개수 (Ratio Test는 엄격하므로 4~5개로 낮춤)
-    :param resize_dim: 정규화할 크기 (가로, 세로)
-    :return: 분류된 동전 금액 (10, 50, 100, 500) 또는 0 (매칭 실패)
+    (RANSAC 적용)
     """
-    print(f"  [분류 시도] (x:{x}, y:{y}, r:{r})")
+    #print(f"  [분류 시도] (x:{x}, y:{y}, r:{r})")
 
-    # 1. (Solution 1) 크기 정규화 (Size Normalization)
-    #    ROI가 너무 작거나(먼 거리) 너무 큰(가까운) 문제를 해결하기 위해
-    #    모든 ROI를 일정한 150x150 크기로 리사이징합니다.
+    # 1. 전처리: 리사이징 및 특징점 추출
     try:
         roi_normalized = cv2.resize(gray_roi_cropped, resize_dim, interpolation=cv2.INTER_AREA)
     except cv2.error as e:
-        print(f"    -> [판정: 실패] (리사이징 오류: {e})")
+        #print(f"    -> [판정: 실패] (리사이징 오류: {e})")
         return 0
 
-    # 2. 정규화된 이미지에서 ORB 특징점 추출
+    # '입력 동전(ROI)'의 좌표와 지문
     kp_roi, des_roi = orb.detectAndCompute(roi_normalized, None)
 
-    if des_roi is None or len(des_roi) < 2:  # knnMatch는 k=2 필요
-        print(f"    -> [판정: 실패] (정규화된 ROI에서 특징점 검출 실패)")
+    if des_roi is None or len(des_roi) < 2:
+        #print(f"    -> [판정: 실패] (ROI에서 특징점 검출 실패)")
         return 0
 
-    best_match_score = 0
-    best_match_value = 0
+    # 2. 점수표 생성 및 매칭
+    scoreboard = {10: 0, 50: 0, 100: 0, 500: 0}
+    min_good_matches_for_homography = 4
 
-    # 3. 모든 템플릿과 비교
-    for coin_value, template_descriptors_list in COIN_TEMPLATES.items():
+    for coin_value, template_list in COIN_TEMPLATES.items():
+
         current_coin_best_score = 0
 
-        for des_template in template_descriptors_list:
+        for kp_template, des_template in template_list:
 
-            # 4. (Solution 2) Lowe's Ratio Test (knnMatch)
-            #    bf.match() 대신 bf.knnMatch(k=2)를 사용합니다.
-            #    k=2: 각 ROI 특징점마다 가장 가까운 템플릿 특징점 2개를 찾습니다.
             try:
                 matches = bf.knnMatch(des_template, des_roi, k=2)
             except cv2.error:
-                continue  # 템플릿이나 ROI 디스크립터가 비어있을 때
+                continue
 
-            # 5. 좋은 매칭(good_matches) 선별
             good_matches = []
-            ratio_threshold = 0.8  # (m.distance / n.distance) 비율 임계값
-
             for match_pair in matches:
-                # k=2로 찾았지만, (가끔) 1개만 반환될 때가 있음
                 if len(match_pair) < 2:
                     continue
-
-                m, n = match_pair  # m: 1순위 매칭, n: 2순위 매칭
-
-                # 1순위(m)가 2순위(n)보다 압도적으로 좋아야 '진짜' 매칭으로 인정
-                # m.distance가 n.distance의 70%보다 작아야 함
+                m, n = match_pair
                 if m.distance < ratio_threshold * n.distance:
                     good_matches.append(m)
 
-            if len(good_matches) > current_coin_best_score:
-                current_coin_best_score = len(good_matches)
+            # 3. 기하학적 검증 (RANSAC)
+            if len(good_matches) < min_good_matches_for_homography:
+                continue
 
-        # (디버깅용) 각 동전별 최고 점수 출력
-        print(f"    - {coin_value}원 점수: {current_coin_best_score}")
+            src_pts = np.float32([kp_template[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+            dst_pts = np.float32([kp_roi[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+            # --------------------
 
-        if current_coin_best_score > best_match_score:
-            best_match_score = current_coin_best_score
-            best_match_value = coin_value
+            M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 3.0)
 
-    # 6. 최종 판정 (Ratio Test는 점수가 훨씬 낮게 나옴!)
-    #    '절대 개수'가 아닌 '엄선된 매칭'이므로, 임계값을 8 -> 4 정도로 낮춰야 함
-    if best_match_score >= min_match_threshold:
-        print(f"    -> [판정: {best_match_value}원] (Score: {best_match_score})")
+            if mask is None:
+                continue
+
+            inlier_count = np.sum(mask)
+
+            if inlier_count > current_coin_best_score:
+                current_coin_best_score = inlier_count
+
+        scoreboard[coin_value] = current_coin_best_score
+        #print(f"    - {coin_value}원 점수: {scoreboard[coin_value]} (Inliers)")
+
+    # 4. 최종 판정
+    best_match_value = max(scoreboard, key=scoreboard.get)
+    best_match_score = scoreboard[best_match_value]
+
+    if best_match_score >= min_inlier_threshold:
+        #print(f"    -> [판정: {best_match_value}원] (Score: {best_match_score})")
         return best_match_value
     else:
-        print(f"    -> [판정: 실패] (최고 점수: {best_match_score} < {min_match_threshold})")
+        #print(f"    -> [판정: 실패] (최고 Inlier: {best_match_score} < {min_inlier_threshold})")
         return 0
 
 def main():
@@ -287,12 +262,11 @@ def main():
     # 1. 이미지 로드
     img = cv2.imread(args.input)
     if img is None:
-        print(f"Error: 이미지 로드 실패 {args.input}")
+        #print(f"Error: 이미지 로드 실패 {args.input}")
         return
 
     # 2. 리사이징
     img_resized = resize_with_aspect_ratio(img, width=800)
-    # 최종 출력을 위한 원본 컬러 이미지 복사
     output_img = img_resized.copy()
 
     # 3. 그레이스케일 변환
@@ -331,97 +305,157 @@ def main():
 
         debug_output_img = img_resized.copy()
         raw_circles = np.uint16(np.around(circles))
-
         for i in raw_circles[0, :]:
-            # 원 그리기 (노란색)
             cv2.circle(debug_output_img, (i[0], i[1]), i[2], (0, 255, 255), 2)
-            # 중심점 (빨간색)
             cv2.circle(debug_output_img, (i[0], i[1]), 2, (0, 0, 255), 3)
-
         count_text_raw = f"initial detection : {len(raw_circles[0])}"
         cv2.putText(debug_output_img, count_text_raw, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
                     1, (0, 255, 255), 2, cv2.LINE_AA)
 
         final_circles = filter_nested_circles(circles)
+        #print(f"초기 검출 원 개수: {len(circles[0])}, 최종 검출 원 개수: {len(final_circles)}")
 
-        print(f"초기 검출 원 개수: {len(circles[0])}, 최종 검출 원 개수: {len(final_circles)}")
-
-        # 9. 화면에 검출된 원 표시
         total_amount = 0
-        for (x, y, r) in final_circles:
-            # 원 그리기 (초록색)
-            cv2.circle(output_img, (x, y), r, (0, 255, 0), 3)
-            # 중심점 (빨간색)
-            cv2.circle(output_img, (x, y), 2, (0, 0, 255), 3)
 
-            # 원형 ROI 추출 로직 시작
+        # 1. 동전의 실제 물리적 크기 (지름 mm)
+        COIN_DIAMETERS_MM = {
+            500: 26.5,
+            100: 24.0,
+            50: 21.6,
+            10: 18.0
+        }
 
-            # 1. 원형 마스크 생성
-            (h, w) = img_resized.shape[:2]
-            mask = np.zeros((h, w), dtype="uint8")
-            cv2.circle(mask, (x, y), r, 255, -1)  # 흰색으로 채워진 원
+        if len(final_circles) > 0:
 
-            # 2. 마스크를 이용해 ROI 추출
-            #    'output_img' (컬러)에서 컬러 ROI 추출 (10원 분류용)
-            color_roi = cv2.bitwise_and(output_img, output_img, mask=mask)
+            # 1단계: 10원짜리 동전(Anchor) 찾기
+            ten_won_circles = []
+            other_circles = []
 
-            #    'clahe_img' (그레이)에서 그레이스케일 ROI 추출 (50/100/500 분류용)
-            gray_roi = cv2.bitwise_and(clahe_img, clahe_img, mask=mask)
+            # (is_ten 함수가 코드 어딘가에 복원되어 있어야 함)
+            for (x_u, y_u, r_u) in final_circles:
+                x, y, r = int(x_u), int(y_u), int(r_u)
 
-            # 3. 마스킹된 영역만 잘라내기
-            x1, y1 = max(0, x - r), max(0, y - r)
-            x2, y2 = min(w, x + r), min(h, y + r)
+                # 원형 ROI 추출 (is_ten에 필요)
+                (h, w) = img_resized.shape[:2]
+                mask = np.zeros((h, w), dtype="uint8")
+                cv2.circle(mask, (x, y), r, 255, -1)
 
-            color_roi_cropped = color_roi[y1:y2, x1:x2]
-            gray_roi_cropped = gray_roi[y1:y2, x1:x2]
+                # 'output_img' (컬러)에서 컬러 ROI 추출
+                color_roi = cv2.bitwise_and(output_img, output_img, mask=mask)
+                x1, y1 = max(0, x - r), max(0, y - r)
+                x2, y2 = min(w, x + r), min(h, y + r)
+                color_roi_cropped = color_roi[y1:y2, x1:x2]
 
-            # (디버깅용) 추출된 ROI 확인
-            cv2.imshow(f"Color ROI {x}", color_roi_cropped)
-            cv2.imshow(f"Gray ROI {x}", gray_roi_cropped)
+                # HSV로 10원 판별 (threshold=0.7로 엄격하게)
+                if is_ten(color_roi_cropped, x, y, r):
+                    ten_won_circles.append((x, y, r))
+                else:
+                    other_circles.append((x, y, r))
 
+            # 2단계: 기준(px_per_mm) 설정
+            px_per_mm = 0
 
-            # --- [추가] 분류 로직 호출 (아직 함수 구현 안 됨) ---
-            coin_value = 0
-            #is_ten(gray_roi_cropped, x, y, r)
-            coin_value = classify_coin(gray_roi_cropped, x, y, r)
-            total_amount += coin_value
+            if len(ten_won_circles) > 0:
+                # --- [Case 1: 10원이 1개라도 발견됨] (성공!) ---
+                # 10원 동전들의 평균 반지름 계산
+                avg_r_10 = np.mean([r for (x, y, r) in ten_won_circles])
+                # 10원(18.0mm) 기준으로 px_per_mm 확정
+                px_per_mm = avg_r_10 / (COIN_DIAMETERS_MM[10] / 2.0)
+                #print(f"--- [Anchor: 10원] ---")
+                #print(f"Px/mm: {px_per_mm:.2f} (Based on 10won avg_r={avg_r_10:.1f})")
 
-            # 분류 결과에 따라 원 색상 변경
-            color = (0, 255, 0)  # 기본 (초록)
-            if coin_value == 10:
-                color = (0, 165, 255)  # 주황
-            elif coin_value == 50:
-                color = (255, 0, 0)  # 파랑
-            elif coin_value == 100:
-                color = (0, 0, 255)  # 빨강
-            elif coin_value == 500:
-                color = (255, 0, 255)  # 보라
+            else:
+                # --- [Case 2: 10원이 없음 (Fallback)] ---
+                # (Fallback C) 은색 동전(other_circles) 중 가장 작은 원을 50원으로 가정
+                if len(other_circles) > 0:
+                    min_r_silver = min([r for (x, y, r) in other_circles])
+                    # 50원(21.6mm) 기준으로 px_per_mm 설정
+                    px_per_mm = min_r_silver / (COIN_DIAMETERS_MM[50] / 2.0)
+                    #print(f"--- [Anchor: 50원 (Fallback)] ---")
+                    #print(f"Px/mm: {px_per_mm:.2f} (Based on 50won min_r={min_r_silver:.1f})")
+                else:
+                    #print("Error: No coins detected.")
+                    return  # 분류 불가
 
-            cv2.circle(output_img, (x, y), r, color, 3)
+            # 3단계: 확정된 px_per_mm로 모든 동전 분류
 
-            text = str(coin_value) if coin_value > 0 else "?"
-            (text_w, text_h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.9, 2)
-            cv2.putText(output_img, text, (x - text_w // 2, y + text_h // 2),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
-        # 검출된 동전 개수 표시
-        count_text = f"detection : {len(final_circles)}"
-        cv2.putText(output_img, count_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                    1, (0, 255, 0), 2, cv2.LINE_AA)
+            # 예상 반지름 맵 계산
+            expected_radii = {}
+            for value, diameter in COIN_DIAMETERS_MM.items():
+                expected_radii[value] = (diameter / 2.0) * px_per_mm
 
-        # 전처리 과정 출력
-        # cv2.imshow("Grayscale", gray)
-        # cv2.imshow("CLAHE", clahe_img)
-        cv2.imshow("Blurred", blurred)
-        cv2.imshow("Debug Canny Edges", canny_debug)
-        cv2.imshow("DEBUG: Before Suppression", debug_output_img)
-        cv2.imshow("Detected Coins", output_img)
+            # (디버깅) 예상 픽셀 크기 출력
+            #print(f"Expected 500: {expected_radii[500]:.1f}px")
+            #print(f"Expected 100: {expected_radii[100]:.1f}px")
+            #print(f"Expected  50: {expected_radii[50]:.1f}px")
+            #print(f"Expected  10: {expected_radii[10]:.1f}px")
+            #print("----------------------------------")
 
-    else:
-        print("검출된 원 없음")
-        cv2.imshow("No Detections", img_resized)
+            # 4. 모든 원을 순회하며 가장 가까운 크기의 동전으로 판정
+            for (x_u, y_u, r_u) in final_circles:
+                x, y, r = int(x_u), int(y_u), int(r_u)
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+                coin_value = 0
+                min_error = float('inf')
+                best_match = 0
+
+                # 4-1. 가장 오차가 적은 동전(best_match)을 먼저 찾음
+                for value, expected_r in expected_radii.items():
+                    error = abs(r - expected_r)
+                    if error < min_error:
+                        min_error = error
+                        best_match = value
+
+                # 4-2. (튜닝포인트) 오차 임계값 (정밀하게 5%~7%로 설정)
+                error_threshold_percent = 0.1  # 7% (5%는 너무 엄격할 수 있음)
+                allowed_error_px = expected_radii[best_match] * error_threshold_percent
+
+                # 4-3. 정밀 검사 및 경계 클리핑
+                if min_error <= allowed_error_px:
+                    # Case 1: 정밀 검사 통과
+                    coin_value = best_match
+                else:
+                    # Case 2: 정밀 검사 실패
+                    if r < expected_radii[10]:
+                        coin_value = 10
+                        #print(f"  (x:{x}, r:{r}) -> [Clipping] Too small, assigned 10")
+
+                    elif r > expected_radii[500]:
+                        coin_value = 500
+                        #print(f"  (x:{x}, r:{r}) -> [Clipping] Too large, assigned 500")
+
+                    else:
+                        coin_value = 0
+
+                total_amount += coin_value
+
+                color = (0, 255, 0)
+                cv2.circle(output_img, (x, y), r, color, 3)
+                text = str(coin_value) if coin_value > 0 else "?"
+                (text_w, text_h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.9, 2)
+                cv2.putText(output_img, text, (x - text_w // 2, y + text_h // 2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
+
+            # 검출된 동전 개수 및 총액 표시
+            count_text = f"Detection: {len(final_circles)} coins"
+            total_text = f"Total: {total_amount} KRW"
+
+            cv2.putText(output_img, count_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.9, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(output_img, total_text, (10, 65), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.9, (0, 255, 0), 2, cv2.LINE_AA)
+
+            # 전처리 과정 출력 (디버깅용)
+            cv2.imshow("original", img_resized)
+            # cv2.imshow("CLAHE", clahe_img)
+            # cv2.imshow("Blurred", blurred)
+            #cv2.imshow("Debug Canny Edges", canny_debug)
+            #cv2.imshow("DEBUG: Before Suppression", debug_output_img)
+            cv2.imshow("Detected Coins", output_img)
+
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     sys.exit(main())
