@@ -257,7 +257,8 @@ def classify_coin(gray_roi_cropped, x, y, r,
 def main():
     args = parse_args()
 
-    load_templates()
+    total_amount = 0
+    coin_counts = {500: 0, 100: 0, 50: 0, 10: 0}
 
     # 1. 이미지 로드
     img = cv2.imread(args.input)
@@ -331,11 +332,10 @@ def main():
             ten_won_circles = []
             other_circles = []
 
-            # (is_ten 함수가 코드 어딘가에 복원되어 있어야 함)
             for (x_u, y_u, r_u) in final_circles:
                 x, y, r = int(x_u), int(y_u), int(r_u)
 
-                # 원형 ROI 추출 (is_ten에 필요)
+                # 원형 ROI 추출 (
                 (h, w) = img_resized.shape[:2]
                 mask = np.zeros((h, w), dtype="uint8")
                 cv2.circle(mask, (x, y), r, 255, -1)
@@ -346,7 +346,7 @@ def main():
                 x2, y2 = min(w, x + r), min(h, y + r)
                 color_roi_cropped = color_roi[y1:y2, x1:x2]
 
-                # HSV로 10원 판별 (threshold=0.7로 엄격하게)
+                # HSV로 10원 판별
                 if is_ten(color_roi_cropped, x, y, r):
                     ten_won_circles.append((x, y, r))
                 else:
@@ -356,7 +356,7 @@ def main():
             px_per_mm = 0
 
             if len(ten_won_circles) > 0:
-                # --- [Case 1: 10원이 1개라도 발견됨] (성공!) ---
+                # Case 1: 10원이 1개라도 발견됨
                 # 10원 동전들의 평균 반지름 계산
                 avg_r_10 = np.mean([r for (x, y, r) in ten_won_circles])
                 # 10원(18.0mm) 기준으로 px_per_mm 확정
@@ -365,8 +365,8 @@ def main():
                 #print(f"Px/mm: {px_per_mm:.2f} (Based on 10won avg_r={avg_r_10:.1f})")
 
             else:
-                # --- [Case 2: 10원이 없음 (Fallback)] ---
-                # (Fallback C) 은색 동전(other_circles) 중 가장 작은 원을 50원으로 가정
+                #Case 2: 10원이 없음
+                # 은색 동전 중 가장 작은 원을 50원으로 가정
                 if len(other_circles) > 0:
                     min_r_silver = min([r for (x, y, r) in other_circles])
                     # 50원(21.6mm) 기준으로 px_per_mm 설정
@@ -429,6 +429,9 @@ def main():
 
                 total_amount += coin_value
 
+                if coin_value in coin_counts:
+                    coin_counts[coin_value] += 1
+
                 color = (0, 255, 0)
                 cv2.circle(output_img, (x, y), r, color, 3)
                 text = str(coin_value) if coin_value > 0 else "?"
@@ -446,15 +449,21 @@ def main():
                         0.9, (0, 255, 0), 2, cv2.LINE_AA)
 
             # 전처리 과정 출력 (디버깅용)
-            cv2.imshow("original", img_resized)
+            #cv2.imshow("original", img_resized)
             # cv2.imshow("CLAHE", clahe_img)
             # cv2.imshow("Blurred", blurred)
             #cv2.imshow("Debug Canny Edges", canny_debug)
             #cv2.imshow("DEBUG: Before Suppression", debug_output_img)
-            cv2.imshow("Detected Coins", output_img)
+            #cv2.imshow("Detected Coins", output_img)
 
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        #cv2.waitKey(0)
+        #cv2.destroyAllWindows()
+
+        print(f"500:{coin_counts[500]}")
+        print(f"100:{coin_counts[100]}")
+        print(f"50:{coin_counts[50]}")
+        print(f"10:{coin_counts[10]}")
+        print(total_amount)
 
 
 if __name__ == "__main__":
