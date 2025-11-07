@@ -260,6 +260,7 @@ def main():
     total_amount = 0
     coin_counts = {500: 0, 100: 0, 50: 0, 10: 0}
 
+    # 동전 검출
     # 1. 이미지 로드
     img = cv2.imread(args.input)
     if img is None:
@@ -318,7 +319,8 @@ def main():
 
         total_amount = 0
 
-        # 1. 동전의 실제 물리적 크기 (지름 mm)
+        # 동전 분류
+        # 동전의 실제 물리적 크기 (지름 mm)
         COIN_DIAMETERS_MM = {
             500: 26.5,
             100: 24.0,
@@ -328,7 +330,7 @@ def main():
 
         if len(final_circles) > 0:
 
-            # 1단계: 10원짜리 동전(Anchor) 찾기
+            # 1. 10원짜리 동전(Anchor) 찾기
             ten_won_circles = []
             other_circles = []
 
@@ -352,7 +354,7 @@ def main():
                 else:
                     other_circles.append((x, y, r))
 
-            # 2단계: 기준(px_per_mm) 설정
+            # 2. 기준(px_per_mm) 설정
             px_per_mm = 0
 
             if len(ten_won_circles) > 0:
@@ -377,7 +379,7 @@ def main():
                     #print("Error: No coins detected.")
                     return  # 분류 불가
 
-            # 3단계: 확정된 px_per_mm로 모든 동전 분류
+            # 3. 확정된 px_per_mm로 모든 동전 분류
 
             # 예상 반지름 맵 계산
             expected_radii = {}
@@ -449,7 +451,7 @@ def main():
                 cv2.putText(output_img, text, (x - text_w // 2, y + text_h // 2),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
 
-            # 검출된 동전 개수 및 총액 표시
+            # 5. 검출된 동전 개수 및 총액 표시
             count_text = f"Detection: {len(final_circles)} coins"
             total_text = f"Total: {total_amount} KRW"
 
