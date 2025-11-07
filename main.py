@@ -432,7 +432,17 @@ def main():
                 if coin_value in coin_counts:
                     coin_counts[coin_value] += 1
 
-                color = (0, 255, 0)
+                    #coin_value에 따라 색상 동적 할당
+                    color = (0, 255, 0)  # 초록
+                    if coin_value == 10:
+                        color = (0, 165, 255)  # 주황
+                    elif coin_value == 50:
+                        color = (255, 0, 0)  # 파랑
+                    elif coin_value == 100:
+                        color = (0, 0, 255)  # 빨강
+                    elif coin_value == 500:
+                        color = (255, 0, 255)  # 보라
+
                 cv2.circle(output_img, (x, y), r, color, 3)
                 text = str(coin_value) if coin_value > 0 else "?"
                 (text_w, text_h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.9, 2)
