@@ -454,9 +454,9 @@ def main():
             total_text = f"Total: {total_amount} KRW"
 
             cv2.putText(output_img, count_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.9, (0, 255, 0), 2, cv2.LINE_AA)
+                        0.9, (0, 0, 0), 2, cv2.LINE_AA)
             cv2.putText(output_img, total_text, (10, 65), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.9, (0, 255, 0), 2, cv2.LINE_AA)
+                        0.9, (0, 0, 0), 2, cv2.LINE_AA)
 
             # 전처리 과정 출력 (디버깅용)
             #cv2.imshow("original", img_resized)
