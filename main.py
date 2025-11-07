@@ -135,7 +135,7 @@ def is_ten(color_roi_cropped, x, y, r, ratio_threshold=0.6):
 
     # 3. 10원짜리 동전의 구리색/갈색 범위 정의 (HSV)
     # hsv_tuner.py 사용하여 튜닝값 설정
-    lower_copper = np.array([0, 90, 0])
+    lower_copper = np.array([0, 90, 50])
     upper_copper = np.array([24, 255, 255])
 
     # 4. 지정된 색상 범위에 해당하는 픽셀 마스크 생성
@@ -366,13 +366,13 @@ def main():
 
             else:
                 #Case 2: 10원이 없음
-                # 은색 동전 중 가장 작은 원을 50원으로 가정
+                # 은색 동전 중 가장 큰 원을 500원으로 가정
                 if len(other_circles) > 0:
-                    min_r_silver = min([r for (x, y, r) in other_circles])
+                    max_r_silver = max([r for (x, y, r) in other_circles])
                     # 50원(21.6mm) 기준으로 px_per_mm 설정
-                    px_per_mm = min_r_silver / (COIN_DIAMETERS_MM[50] / 2.0)
-                    #print(f"--- [Anchor: 50원 (Fallback)] ---")
-                    #print(f"Px/mm: {px_per_mm:.2f} (Based on 50won min_r={min_r_silver:.1f})")
+                    px_per_mm = max_r_silver / (COIN_DIAMETERS_MM[500] / 2.0)
+                    #print(f"--- [Anchor: 500원 (Fallback)] ---")
+                    #print(f"Px/mm: {px_per_mm:.2f} (Based on 500won min_r={max_r_silver:.1f})")
                 else:
                     #print("Error: No coins detected.")
                     return  # 분류 불가
