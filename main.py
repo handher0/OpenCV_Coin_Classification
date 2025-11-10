@@ -310,7 +310,7 @@ def main():
         for i in raw_circles[0, :]:
             cv2.circle(debug_output_img, (i[0], i[1]), i[2], (0, 255, 255), 2)
             cv2.circle(debug_output_img, (i[0], i[1]), 2, (0, 0, 255), 3)
-        count_text_raw = f"initial detection : {len(raw_circles[0])}"
+        count_text_raw = f"detection : {len(raw_circles[0])}"
         cv2.putText(debug_output_img, count_text_raw, (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
                     1, (0, 255, 255), 2, cv2.LINE_AA)
 
@@ -462,14 +462,14 @@ def main():
 
             # 전처리 과정 출력 (디버깅용)
             #cv2.imshow("original", img_resized)
-            # cv2.imshow("CLAHE", clahe_img)
-            # cv2.imshow("Blurred", blurred)
+            #cv2.imshow("CLAHE", clahe_img)
+            #cv2.imshow("Blurred", blurred)
             #cv2.imshow("Debug Canny Edges", canny_debug)
-            #cv2.imshow("DEBUG: Before Suppression", debug_output_img)
-            #cv2.imshow("Detected Coins", output_img)
+            #cv2.imshow("Detection", debug_output_img)
+            cv2.imshow("Result", output_img)
 
-        #cv2.waitKey(0)
-        #cv2.destroyAllWindows()
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
         print(f"500:{coin_counts[500]}")
         print(f"100:{coin_counts[100]}")
