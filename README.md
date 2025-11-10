@@ -1,7 +1,6 @@
-# 한국 동전 합계 계산
+# OpenCV를 활용한 한국 동전 합계 계산
 
 
-# 입출력 예시
 ## 입력 예시
 ```bash
 python main.py --input path/to/image.jpg
